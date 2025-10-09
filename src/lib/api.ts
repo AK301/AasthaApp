@@ -3,6 +3,7 @@ export type ChatMessage = {
     from: "host" | "aastha";
     text: string;
     time: string;
+    status?: "sent" | "delivered" | "seen"; // 👈 new
 };
 
 export type Booking = {
@@ -39,3 +40,6 @@ export async function fetchBookingsFromAPI(): Promise<Booking[]> {
 export async function fetchCalendarData(): Promise<string[]> {
     return ["2025-10-10", "2025-10-11"];
 }
+
+
+

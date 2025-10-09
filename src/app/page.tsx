@@ -2,6 +2,9 @@
 import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import SplashScreen from "../components/Splashscreen";
+
+
 
 const AasthaBookingManager = dynamic(
     () => import("../components/AasthaBookingManager"),
