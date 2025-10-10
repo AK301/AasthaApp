@@ -42,18 +42,52 @@ export async function fetchChatHistory(): Promise<any[]> {
         return [];
     }
 }
-
-// ✅ Fetch bookings (real backend version)
-export async function fetchBookingsFromAPI(): Promise<any[]> {
+// ✅ Fetch list of bookings for a date range and user
+export async function fetchBookingsListFromBackend(
+    startDate: string,
+    endDate: string,
+    userPhone: string
+): Promise<any[]> {
     try {
-        const response = await fetch(`${API_BASE_URL}/bookings`);
-        const data = await response.json();
-        return Array.isArray(data) ? data : data.bookings || [];
+        const myHeaders = new Headers();
+        myHeaders.append("Content-Type", "application/json");
+        const token =
+            process.env.NEXT_PUBLIC_BOOKING_API_TOKEN ||
+            "Oi1gz42WeqrJ/W9qZI)PAwiH90B\\7\\=0"; // fallback token
+
+        myHeaders.append("Authorization", `Bearer ${token}`);
+
+        const raw = JSON.stringify({
+            start_date: startDate,
+            end_date: endDate,
+            user_phone: userPhone,
+        });
+
+        const apiBase = process.env.NEXT_PUBLIC_BOOKING_API || "http://localhost:3001";
+        const response = await fetch(`${apiBase}/booking/list/`, {
+            method: "POST",
+            headers: myHeaders,
+            body: raw,
+            redirect: "follow",
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            console.error("❌ Failed to fetch booking list:", response.status, err);
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log("✅ Booking list received from backend:", result);
+
+        return Array.isArray(result) ? result : [];
     } catch (error) {
-        console.error("⚠️ Error fetching bookings:", error);
+        console.error("⚠️ Error fetching booking list:", error);
         return [];
     }
 }
+
+
 
 // ✅ Fetch calendar data (optional endpoint)
 export async function fetchCalendarData(): Promise<string[]> {
