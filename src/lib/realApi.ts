@@ -87,16 +87,13 @@ export async function fetchBookingsListFromBackend(
     }
 }
 
-
-
-// ✅ Fetch calendar data (optional endpoint)
-export async function fetchCalendarData(): Promise<string[]> {
+export async function fetchICalBookings(): Promise<any[]> {
     try {
-        const response = await fetch(`${API_BASE_URL}/calendar`);
-        const data = await response.json();
-        return Array.isArray(data) ? data : [];
-    } catch (error) {
-        console.error("⚠️ Error fetching calendar data:", error);
+        const res = await fetch("http://127.0.0.1:8000/ical_import");
+        const data = await res.json();
+        return data.bookings || [];
+    } catch (err) {
+        console.error("Error fetching iCal bookings:", err);
         return [];
     }
 }

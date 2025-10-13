@@ -11,3 +11,13 @@ body,
 body {
     @apply bg-gray-100 text-gray-900;
 }
+
+.react-calendar__tile {
+    padding: 10px 0 !important;
+    border-radius: 8px !important;
+}
+
+.react-calendar__tile--now {
+    background: #fef08a !important;
+    /* highlight today's date */
+}

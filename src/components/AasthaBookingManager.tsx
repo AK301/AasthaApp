@@ -4,20 +4,24 @@ import React, { useEffect, useState, useRef } from "react";
 import TopBar from "./common/TopBar";
 import BottomNav from "./common/BottomNav";
 import { getAPI, setAPIMode, isMockMode } from "../lib/config";
-import { fetchBookingsListFromBackend } from "../lib/realApi";
-import {
-  startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
-  eachDayOfInterval,
-  format,
-  isSameMonth,
-} from "date-fns";
+import { fetchBookingsListFromBackend, fetchICalBookings } from "../lib/realApi"; // ✅ added import
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
 
-import { ChatMessage as ApiChatMessage, Booking as ApiBooking } from "../lib/api";
+// ✅ Unified booking type (works for both backend + iCal)
+type UnifiedBooking = {
+  id?: string;
+  customer_name?: string;
+  customer_contact?: string;
+  start_date: string;
+  end_date: string;
+  customer_count?: number;
+  status?: string;
+  summary?: string;
+};
+
+import { ChatMessage as ApiChatMessage } from "../lib/api";
 type ChatMessage = ApiChatMessage;
-type Booking = ApiBooking;
 
 // 💬 Chat bubble UI
 function MessageBubble({ m }: { m: ChatMessage }) {
@@ -31,8 +35,8 @@ function MessageBubble({ m }: { m: ChatMessage }) {
       )}
       <div
         className={`px-4 py-2 rounded-2xl max-w-[70%] shadow ${isAastha
-            ? "bg-white text-gray-800 rounded-bl-none"
-            : "bg-green-600 text-white rounded-br-none"
+          ? "bg-white text-gray-800 rounded-bl-none"
+          : "bg-green-600 text-white rounded-br-none"
           }`}
       >
         <p className="text-sm">{m.text}</p>
@@ -58,7 +62,7 @@ export default function AasthaBookingManager() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<UnifiedBooking[]>([]);
   const [registeredNumber, setRegisteredNumber] = useState(
     localStorage.getItem("registeredNumber") || ""
   );
@@ -74,16 +78,20 @@ export default function AasthaBookingManager() {
         const msgs = await api.fetchChatHistory();
         setMessages(Array.isArray(msgs) ? msgs : []);
 
-        // ✅ 4. Fetch real backend bookings
         const userPhone = localStorage.getItem("registeredNumber") || "919834069861";
+
+        // ✅ Fetch internal + iCal bookings
         const bookingList = await fetchBookingsListFromBackend(
           "2025-10-10",
           "2025-12-31",
           userPhone
         );
+        const icalBookings = await fetchICalBookings();
 
-        if (Array.isArray(bookingList)) {
-          setBookings(bookingList);
+        const allBookings = [...(bookingList || []), ...icalBookings];
+        if (Array.isArray(allBookings)) {
+          setBookings(allBookings);
+          console.log("📅 Combined Bookings:", allBookings);
         }
       } catch (error) {
         console.error("Error loading initial data:", error);
@@ -91,7 +99,7 @@ export default function AasthaBookingManager() {
     })();
   }, []);
 
-  // ✅ 2. Auto-scroll when new messages
+  // ✅ 2. Auto-scroll chat
   useEffect(() => {
     if (chatRef.current) {
       setTimeout(() => {
@@ -111,7 +119,13 @@ export default function AasthaBookingManager() {
     });
 
     const msgId = Date.now().toString();
-    const outgoing: ChatMessage = { id: msgId, from: "host", text, time, status: "sent" };
+    const outgoing: ChatMessage = {
+      id: msgId,
+      from: "host" as "host",
+      text,
+      time,
+      status: "sent",
+    };
 
     setMessages((prev) => [...prev, outgoing]);
     setInput("");
@@ -123,21 +137,23 @@ export default function AasthaBookingManager() {
     setTimeout(() => {
       setTyping(false);
 
-      const aasthaReply = {
+      const aasthaReply: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        from: "aastha",
+        from: "aastha" as "aastha",
         text: res.reply,
         time,
       };
 
       setMessages((prev) => [...prev, aasthaReply]);
 
-      // 🧠 Detect if Aastha replied with bookings and auto-switch
+      // 🧠 Detect bookings in Aastha's message
       if (res.reply && res.reply.toLowerCase().includes("booking id")) {
         try {
-          const matches = [...res.reply.matchAll(
-            /\*\*(.*?)\*\*.*?(?:contact number|number|contact)\s*([0-9]*)?.*?booking id\s*\*\*(\d+)\*\*.*?check-in on\s*(?:\*\*)?(\d{1,2}\w*\s+\w+).*?check-out on\s*(?:\*\*)?(\d{1,2}\w*\s+\w+).*?(?:for\s*\*\*(\d+)\*\*\s*guests?)?/gi
-          )];
+          const matches = [
+            ...res.reply.matchAll(
+              /\*\*(.*?)\*\*.*?(?:contact number|number|contact)\s*([0-9]*)?.*?booking id\s*\*\*(\d+)\*\*.*?check-in on\s*(?:\*\*)?(\d{1,2}\w*\s+\w+).*?check-out on\s*(?:\*\*)?(\d{1,2}\w*\s+\w+).*?(?:for\s*\*\*(\d+)\*\*\s*guests?)?/gi
+            ),
+          ];
 
           const parsedBookings = matches.map((m) => ({
             id: m[3],
@@ -150,7 +166,7 @@ export default function AasthaBookingManager() {
           }));
 
           if (parsedBookings.length > 0) {
-            setBookings(parsedBookings);
+            setBookings(parsedBookings as any);
             setTab("bookings");
           }
         } catch (err) {
@@ -160,7 +176,7 @@ export default function AasthaBookingManager() {
     }, 1500);
   }
 
-  // ✅ 4. Registration screen
+  // ✅ Registration screen
   if (!registeredNumber) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
@@ -189,10 +205,18 @@ export default function AasthaBookingManager() {
     );
   }
 
-  // ✅ 5. Main UI
+  // ✅ Helpers for calendar logic
+  function normalizeDate(d: Date) {
+    return new Date(d.toDateString());
+  }
+
+  // ✅ Main UI
   return (
     <div className="min-h-screen flex flex-col pb-16 bg-gray-100">
-      <TopBar title="Aastha — AI Booking Manager" subtitle="Chat with Aastha to manage bookings" />
+      <TopBar
+        title="Aastha — AI Booking Manager"
+        subtitle="Chat with Aastha to manage bookings"
+      />
 
       {/* 🔄 API Mode Toggle */}
       <div className="flex justify-center items-center bg-white py-2 border-b">
@@ -203,7 +227,9 @@ export default function AasthaBookingManager() {
             setAPIMode(newMode);
             window.location.reload();
           }}
-          className={`px-3 py-1 rounded-full text-xs font-semibold transition ${mockMode ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"
+          className={`px-3 py-1 rounded-full text-xs font-semibold transition ${mockMode
+            ? "bg-yellow-100 text-yellow-700"
+            : "bg-green-100 text-green-700"
             }`}
         >
           {mockMode ? "🧪 Mock API Mode" : "🌐 Live API Mode"}
@@ -212,6 +238,7 @@ export default function AasthaBookingManager() {
 
       {/* Tabs */}
       <div className="flex-1 overflow-auto">
+        {/* 💬 Chat Tab */}
         {tab === "chat" && (
           <div className="flex flex-col h-full">
             <div className="flex-1 overflow-auto p-4 bg-gray-50" ref={chatRef}>
@@ -244,18 +271,17 @@ export default function AasthaBookingManager() {
           </div>
         )}
 
-        {/* ✅ BOOKINGS TAB */}
+        {/* 📅 Bookings Tab */}
         {tab === "bookings" && (
           <div className="p-4">
             <h2 className="font-semibold text-lg mb-3">Bookings</h2>
-
             {bookings.length === 0 ? (
               <p className="text-gray-500 text-sm">No bookings found.</p>
             ) : (
               <div className="space-y-3">
-                {bookings.map((b: any) => (
+                {bookings.map((b, i) => (
                   <div
-                    key={b.bookings_id || b.id}
+                    key={b.id || i}
                     className="flex items-center justify-between p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition"
                   >
                     <div className="flex items-center gap-3">
@@ -263,13 +289,15 @@ export default function AasthaBookingManager() {
                         {b.customer_name?.charAt(0) || "?"}
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900">{b.customer_name}</div>
+                        <div className="font-medium text-gray-900">
+                          {b.customer_name || b.summary || "Guest"}
+                        </div>
                         <div className="text-xs text-gray-500">
                           {b.start_date} → {b.end_date}
                         </div>
                         <div className="text-xs text-gray-600">
                           👥 {b.customer_count || 1} guest
-                          {b.customer_count > 1 ? "s" : ""}
+                          {b.customer_count! > 1 ? "s" : ""}
                         </div>
                       </div>
                     </div>
@@ -285,6 +313,72 @@ export default function AasthaBookingManager() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* 🗓️ Calendar Tab */}
+        {tab === "calendar" && (
+          <div className="p-4">
+            <h2 className="font-semibold text-lg mb-3">Calendar View</h2>
+            <Calendar
+              tileContent={({ date }) => {
+                const d = new Date(date);
+                d.setHours(0, 0, 0, 0); // normalize
+
+                const booking = bookings.find((b) => {
+                  const start = new Date(b.start_date);
+                  start.setHours(0, 0, 0, 0);
+
+                  const end = new Date(b.end_date);
+                  end.setHours(0, 0, 0, 0);
+                  end.setDate(end.getDate() - 1); // exclude checkout day
+
+                  return d >= start && d <= end;
+                });
+
+                return booking ? (
+                  <div
+                    title={`${booking.summary || "Booked"} (${booking.start_date} → ${booking.end_date})`}
+                  ></div>
+                ) : null;
+              }}
+
+              tileClassName={({ date }) => {
+                const d = new Date(date);
+                d.setHours(0, 0, 0, 0);
+
+                const matched = bookings.find((b) => {
+                  const start = new Date(b.start_date);
+                  start.setHours(0, 0, 0, 0);
+
+                  const end = new Date(b.end_date);
+                  end.setHours(0, 0, 0, 0);
+                  end.setDate(end.getDate() - 1);
+
+                  return d >= start && d <= end;
+                });
+
+                if (!matched) return "";
+
+                const start = new Date(matched.start_date);
+                start.setHours(0, 0, 0, 0);
+
+                const end = new Date(matched.end_date);
+                end.setHours(0, 0, 0, 0);
+                end.setDate(end.getDate() - 1);
+
+                if (d.getTime() === start.getTime())
+                  return "bg-green-500 text-white rounded-lg";
+                if (d.getTime() === end.getTime())
+                  return "bg-orange-400 text-white rounded-lg";
+                return "bg-red-400 text-white rounded-lg";
+              }}
+            />
+
+            <p className="text-sm text-gray-600 mt-2">
+              🟩 Green = check-in, 🟧 Orange = check-out, 🔴 Red = booked nights
+              (from Update247 iCal)
+            </p>
           </div>
         )}
       </div>
