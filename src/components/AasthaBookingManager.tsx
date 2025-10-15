@@ -31,8 +31,8 @@ function MessageBubble({ m }: { m: ChatMessage }) {
       )}
       <div
         className={`px-4 py-2 rounded-2xl max-w-[70%] shadow ${isAastha
-            ? "bg-white text-gray-800 rounded-bl-none"
-            : "bg-green-600 text-white rounded-br-none"
+          ? "bg-white text-gray-800 rounded-bl-none"
+          : "bg-green-600 text-white rounded-br-none"
           }`}
       >
         <p className="text-sm">{m.text}</p>
@@ -59,6 +59,8 @@ export default function AasthaBookingManager() {
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
   const [registeredNumber, setRegisteredNumber] = useState(
     localStorage.getItem("registeredNumber") || ""
   );
@@ -92,13 +94,16 @@ export default function AasthaBookingManager() {
   }, []);
 
   // ✅ 2. Auto-scroll when new messages
+  // ✅ Auto-scroll smoothly to bottom on new message or typing
   useEffect(() => {
     if (chatRef.current) {
-      setTimeout(() => {
-        chatRef.current!.scrollTop = chatRef.current!.scrollHeight;
-      }, 0);
+      chatRef.current.scrollTo({
+        top: chatRef.current.scrollHeight,
+        behavior: "smooth",
+      });
     }
   }, [messages, typing]);
+
 
   // ✅ 3. Handle sending messages
   async function handleSend() {
@@ -213,29 +218,39 @@ export default function AasthaBookingManager() {
       {/* Tabs */}
       <div className="flex-1 overflow-auto">
         {tab === "chat" && (
-          <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-auto p-4 bg-gray-50" ref={chatRef}>
+          <div className="flex flex-col h-[calc(100vh-160px)] bg-gray-50">
+            {/* 💬 Messages Section */}
+            <div className="flex-1 overflow-auto p-4" ref={chatRef}>
               {messages.map((m) => (
                 <MessageBubble key={m.id} m={m} />
               ))}
+
               {typing && (
-                <div className="flex justify-start mb-3">
-                  <div className="bg-gray-200 px-4 py-2 rounded-2xl text-sm text-gray-600 animate-pulse">
-                    Aastha is typing…
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-8 w-8 rounded-full bg-green-600 flex items-center justify-center text-white text-sm mr-2">
+                    A
+                  </div>
+                  <div className="flex gap-1 bg-gray-200 px-4 py-2 rounded-2xl">
+                    <div className="h-2 w-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.2s]"></div>
+                    <div className="h-2 w-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.1s]"></div>
+                    <div className="h-2 w-2 bg-gray-500 rounded-full animate-bounce"></div>
                   </div>
                 </div>
               )}
+
             </div>
-            <div className="p-3 border-t bg-white flex items-center gap-2">
+
+            {/* ✍️ Input Section (Sticky Bottom) */}
+            <div className="sticky bottom-0 left-0 w-full bg-white border-t flex items-center gap-2 p-3">
               <input
                 className="flex-1 border rounded-full px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 placeholder="Type a message..."
               />
               <button
-                className="p-2 bg-green-600 rounded-full text-white hover:bg-green-700"
+                className="p-2 bg-green-600 rounded-full text-white hover:bg-green-700 transition"
                 onClick={handleSend}
               >
                 Send
@@ -243,6 +258,7 @@ export default function AasthaBookingManager() {
             </div>
           </div>
         )}
+
 
         {/* ✅ BOOKINGS TAB */}
         {tab === "bookings" && (
